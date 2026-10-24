@@ -1,0 +1,72 @@
+# raw2jpg — single compose file
+# Toggle options by commenting / uncommenting blocks below, then: docker compose up
+#
+# .env: INPUT_PATH, MODE=scan|dry-run|extract, INTENT=nas|balanced|remote, LOG_LEVEL, …
+
+name: raw2jpg
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Remote workers on another host: keep this published on LAN only (never public internet).
+    # Worker-only machine: comment out this whole `redis:` service and point REDIS_URL at the main host.
+    ports:
+      - "${REDIS_PUBLISH_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  worker:
+    build: .
+    restart: "no" # one-shot job; exits when MODE finishes
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      INPUT_PATH: ${INPUT_PATH:-/mnt/photos}
+      MODE: ${MODE:-scan}
+      LOG_LEVEL: ${LOG_LEVEL:-log}
+      INTENT: ${INTENT:-balanced}
+      # Same-stack redis (default). Remote worker: use redis://<main-host-lan-ip>:6379/0
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REWRITE: ${REWRITE:-false}
+      MAX_LONG_EDGE: ${MAX_LONG_EDGE:-2560}
+      JPEG_QUALITY: ${JPEG_QUALITY:-85}
+      DEVELOP_FALLBACK: ${DEVELOP_FALLBACK:-true}
+      ENABLE_GPU: ${ENABLE_GPU:-}
+    # Worker-only on a second server (Immich ML style): comment out depends_on
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      # --- photos mount: pick ONE (comment the other) ---
+      # A) Local / host path (bind)
+      - ${HOST_PATH:?Set HOST_PATH in .env}:/mnt/photos
+      # B) Docker NFS volume (Immich-style; set NAS_ADDR / NAS_EXPORT in .env; needs rw for JPG writes)
+      # - photos:/mnt/photos
+    # --- optional NVIDIA GPU (INTENT=remote / develop fallback) ---
+    # Uncomment if the host has NVIDIA Container Toolkit:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  redis-data:
+  # Uncomment together with `photos:/mnt/photos` above:
+  # photos:
+  #   driver: local
+  #   driver_opts:
+  #     type: nfs
+  #     o: addr=${NAS_ADDR:-192.0.2.10},nfsvers=4,nolock,hard,timeo=600,retrans=2
+  #     device: ":${NAS_EXPORT:-/volume1/share/photos}"
+
+networks: {}
