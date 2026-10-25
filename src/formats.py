@@ -85,7 +85,9 @@ def sibling_stamped_by_tool(raw_path, tool_name: str) -> bool:
         except (OSError, subprocess.TimeoutExpired):
             continue
         blob = (proc.stdout or "") + (proc.stderr or "")
-        if tool_name and tool_name in blob:
+        # Current stamp + legacy raw2jpg from pre-rename builds
+        names = {n for n in (tool_name, "jaypeg", "raw2jpg") if n}
+        if any(n in blob for n in names):
             return True
     return False
 

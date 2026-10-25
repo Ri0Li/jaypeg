@@ -17,7 +17,7 @@ from src.logging_setup import setup_logging
 from src.queue import JobQueue
 from src.report import write_pre_extract_report
 
-log = logging.getLogger("raw2jpg")
+log = logging.getLogger("jaypeg")
 
 
 def _process_one(
@@ -285,7 +285,7 @@ def main() -> int:
     cfg = load_config()
     setup_logging(cfg.log_level)
     log.info(
-        "raw2jpg %s starting mode=%s intent=%s enable_gpu=%s develop_fallback=%s force_develop=%s input=%s",
+        "jaypeg %s starting mode=%s intent=%s enable_gpu=%s develop_fallback=%s force_develop=%s input=%s",
         __version__,
         cfg.mode,
         cfg.intent,

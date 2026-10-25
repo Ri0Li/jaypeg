@@ -31,4 +31,4 @@ def setup_logging(level_name: str) -> logging.Logger:
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s", "%H:%M:%S"))
     root.addHandler(handler)
     root.setLevel(level)
-    return logging.getLogger("raw2jpg")
+    return logging.getLogger("jaypeg")

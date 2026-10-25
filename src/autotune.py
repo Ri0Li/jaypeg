@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from src.config import Config
 
-log = logging.getLogger("raw2jpg")
+log = logging.getLogger("jaypeg")
 
 
 @dataclass(frozen=True)

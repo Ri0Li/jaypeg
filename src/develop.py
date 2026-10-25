@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-log = logging.getLogger("raw2jpg")
+log = logging.getLogger("jaypeg")
 
 
 def _imagemagick_bin() -> str | None:
@@ -140,7 +140,7 @@ def full_develop(
     env["DARKTABLE_USE_OPENCL"] = "1" if enable_gpu else "0"
 
     # Isolated config + in-memory library so parallel workers don't lock each other.
-    with tempfile.TemporaryDirectory(prefix="raw2jpg-dt-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="jaypeg-dt-") as tmp:
         tmp_path = Path(tmp)
         cfg = tmp_path / "config"
         cfg.mkdir()

@@ -7,14 +7,14 @@ from typing import Any
 
 import redis
 
-log = logging.getLogger("raw2jpg")
+log = logging.getLogger("jaypeg")
 
-KEY_PENDING = "raw2jpg:pending"
-KEY_DONE = "raw2jpg:done"
-KEY_FAILED = "raw2jpg:failed"
-KEY_SKIPPED = "raw2jpg:skipped"
-KEY_PROGRESS = "raw2jpg:progress"
-KEY_LOCK_PREFIX = "raw2jpg:lock:"
+KEY_PENDING = "jaypeg:pending"
+KEY_DONE = "jaypeg:done"
+KEY_FAILED = "jaypeg:failed"
+KEY_SKIPPED = "jaypeg:skipped"
+KEY_PROGRESS = "jaypeg:progress"
+KEY_LOCK_PREFIX = "jaypeg:lock:"
 
 
 class JobQueue:

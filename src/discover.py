@@ -6,7 +6,7 @@ from pathlib import Path
 
 from src.formats import has_sibling_non_raw, is_raw, sibling_stamped_by_tool
 
-log = logging.getLogger("raw2jpg")
+log = logging.getLogger("jaypeg")
 
 
 @dataclass
@@ -27,7 +27,7 @@ class DiscoverResult:
 def discover(
     root: str | Path,
     *,
-    tool_name: str = "raw2jpg",
+    tool_name: str = "jaypeg",
 ) -> DiscoverResult:
     root_path = Path(root)
     if not root_path.exists():

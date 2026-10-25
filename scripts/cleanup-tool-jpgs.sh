@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Delete companion JPGs stamped by this tool (Software contains raw2jpg).
+# Delete companion JPGs stamped by this tool (Software contains jaypeg).
+# Also matches legacy raw2jpg stamps from earlier builds.
 # Never deletes camera duals without the tool stamp.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,7 +26,8 @@ host = Path(env.get("HOST_PATH", ""))
 if not host.is_dir():
     raise SystemExit(f"HOST_PATH not a directory: {host}")
 
-tool = "raw2jpg"
+# Current stamp + legacy stamp from pre-rename builds
+tools = ("jaypeg", "raw2jpg")
 deleted = kept = 0
 jpgs = [p for p in host.rglob("*") if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg"}]
 
@@ -39,26 +41,30 @@ def software_blob(jpg: Path) -> str:
         )
         return (proc.stdout or "") + (proc.stderr or "")
     rel = jpg.relative_to(host).as_posix()
-    proc = subprocess.run(
-        [
-            "docker", "run", "--rm", "--entrypoint", "exiftool",
-            "-v", f"{host}:/photos:ro", "raw2jpg-worker",
-            "-s3", "-Software", "-ProcessingSoftware", "-XMP-xmp:CreatorTool", f"/photos/{rel}",
-        ],
-        capture_output=True,
-        text=True,
-    )
-    return (proc.stdout or "") + (proc.stderr or "")
+    # Prefer compose project image name; fall back to GHCR tag if built that way
+    for image in ("jaypeg-worker", "ghcr.io/ri0li/jaypeg:latest"):
+        proc = subprocess.run(
+            [
+                "docker", "run", "--rm", "--entrypoint", "exiftool",
+                "-v", f"{host}:/photos:ro", image,
+                "-s3", "-Software", "-ProcessingSoftware", "-XMP-xmp:CreatorTool", f"/photos/{rel}",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode == 0:
+            return (proc.stdout or "") + (proc.stderr or "")
+    return ""
 
 
 for jpg in jpgs:
     blob = software_blob(jpg)
-    if tool in blob:
+    if any(t in blob for t in tools):
         jpg.unlink()
         deleted += 1
         print(f"deleted {jpg}")
     else:
         kept += 1
 
-print(f"cleanup done: deleted={deleted} kept_other={kept} tool={tool}")
+print(f"cleanup done: deleted={deleted} kept_other={kept} tools={tools}")
 PY

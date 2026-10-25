@@ -9,7 +9,7 @@ from src import __version__
 from src.develop import full_develop
 from src.formats import companion_jpg_path
 
-log = logging.getLogger("raw2jpg")
+log = logging.getLogger("jaypeg")
 
 
 @dataclass

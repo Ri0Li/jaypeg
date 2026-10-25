@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-log = logging.getLogger("raw2jpg")
+log = logging.getLogger("jaypeg")
 
 # Rough native embed / full develop average for pre-extract planning
 EST_BYTES_PER_COMPANION = 4 * 1024 * 1024
@@ -42,7 +42,7 @@ def write_pre_extract_report(
     gb_with_fb = _giB(raw_only)
 
     lines = [
-        f"# raw2jpg {mode} report",
+        f"# jaypeg {mode} report",
         "",
         f"- time_utc: `{ts}`",
         f"- input_path: `{cfg.input_path}`",
@@ -113,7 +113,7 @@ def _prune_jobs(jobs_dir: Path, keep: int) -> None:
 
 def _write_history(root: Path, jobs_dir: Path) -> None:
     files = sorted(jobs_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
-    lines = ["# raw2jpg report history", ""]
+    lines = ["# jaypeg report history", ""]
     for f in files:
         lines.append(f"- [{f.name}](jobs/{f.name})")
     lines.append("")

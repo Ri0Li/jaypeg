@@ -80,7 +80,7 @@ def load_config() -> Config:
         concurrency=None,
         # Compose sets this for the stack; not a user .env.example knob
         redis_url=_env("REDIS_URL", "redis://redis:6379/0") or "redis://redis:6379/0",
-        tool_name="raw2jpg",
+        tool_name="jaypeg",
         hostname=socket.gethostname(),
         result_dir="/result",
         result_keep=20,

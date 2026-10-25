@@ -16,7 +16,7 @@ set -a
 source "$ENV_FILE"
 set +a
 
-MARKER="# raw2jpg-cron"
+MARKER="# jaypeg-cron"
 START_SH="${ROOT}/scripts/job-start.sh"
 STOP_SH="${ROOT}/scripts/job-stop.sh"
 LOG_DIR="${ROOT}/result"
@@ -40,7 +40,7 @@ strip_old() {
 _cron_on="$(echo "${CRON_ENABLE:-false}" | tr '[:upper:]' '[:lower:]')"
 if [[ "$_cron_on" != "true" && "$_cron_on" != "1" && "$_cron_on" != "yes" && "$_cron_on" != "on" ]]; then
   strip_old | crontab -
-  echo "CRON_ENABLE=false — removed raw2jpg crontab entries (if any)"
+  echo "CRON_ENABLE=false — removed jaypeg crontab entries (if any)"
   exit 0
 fi
 

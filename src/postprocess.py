@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-log = logging.getLogger("raw2jpg")
+log = logging.getLogger("jaypeg")
 
 
 def _imagemagick_bin() -> str | None:

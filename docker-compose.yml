@@ -1,4 +1,4 @@
-# raw2jpg — single compose file
+# jaypeg — single compose file
 # Toggle options by commenting / uncommenting blocks below, then: docker compose up
 #
 # .env: only keys from .env.example (INPUT_PATH, MODE, INTENT, …)
