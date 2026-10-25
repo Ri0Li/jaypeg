@@ -49,6 +49,7 @@ def write_pre_extract_report(
         f"- mode: `{mode}`",
         f"- intent: `{cfg.intent}`",
         f"- develop_fallback: `{cfg.develop_fallback}`",
+        f"- force_develop: `{cfg.force_develop}`",
         "",
         "## Counts",
         "",

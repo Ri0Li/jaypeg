@@ -62,6 +62,7 @@ Logs: `./result/cron-start.log`, `./result/cron-stop.log`. Manual: `./scripts/jo
 | Variable | What you set | Notes |
 |----------|--------------|--------|
 | `REWRITE` | `true` / `false` | Regenerate JPGs stamped by this tool. Never overwrites camera duals. |
+| `FORCE_DEVELOP` | `true` / `false` | Skip embed preview; always full-res darktable (concurrency forced to 1). |
 | `ENABLE_GPU` | `true` / `false` or empty | Override INTENT GPU; empty = auto from INTENT |
 
 ## Extraction behaviour

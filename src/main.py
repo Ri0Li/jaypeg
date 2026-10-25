@@ -56,6 +56,7 @@ def _process_one(
         tool_name=cfg.tool_name,
         write=write,
         develop_fallback=cfg.develop_fallback,
+        force_develop=cfg.force_develop,
     )
 
     if result.status == "ok" and result.method == "preview":
@@ -284,12 +285,13 @@ def main() -> int:
     cfg = load_config()
     setup_logging(cfg.log_level)
     log.info(
-        "raw2jpg %s starting mode=%s intent=%s enable_gpu=%s develop_fallback=%s input=%s",
+        "raw2jpg %s starting mode=%s intent=%s enable_gpu=%s develop_fallback=%s force_develop=%s input=%s",
         __version__,
         cfg.mode,
         cfg.intent,
         cfg.enable_gpu,
         cfg.develop_fallback,
+        cfg.force_develop,
         cfg.input_path,
     )
 

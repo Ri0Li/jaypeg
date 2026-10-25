@@ -35,6 +35,7 @@ class Config:
     rewrite: bool
     enable_gpu: bool
     develop_fallback: bool
+    force_develop: bool
     # Hardcoded (not user env)
     output_ext: str
     min_jpeg_bytes: int
@@ -73,6 +74,7 @@ def load_config() -> Config:
         rewrite=_env_bool("REWRITE", False),
         enable_gpu=enable_gpu,
         develop_fallback=_env_bool("DEVELOP_FALLBACK", True),
+        force_develop=_env_bool("FORCE_DEVELOP", False),
         output_ext=".JPG",
         min_jpeg_bytes=51200,
         concurrency=None,

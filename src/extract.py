@@ -107,6 +107,7 @@ def extract_companion(
     tool_name: str,
     write: bool,
     develop_fallback: bool = True,
+    force_develop: bool = False,
 ) -> ExtractResult:
     out = companion_jpg_path(raw, output_ext)
 
@@ -120,6 +121,16 @@ def extract_companion(
         )
 
     if not write:
+        if force_develop:
+            if develop_fallback:
+                return ExtractResult("ok", "develop", out, None, "would_force_develop")
+            return ExtractResult(
+                "failed",
+                None,
+                out,
+                None,
+                "would_fail_force_develop_disabled",
+            )
         if has_embedded_preview(raw):
             return ExtractResult("ok", "preview", out, None, "would_extract_preview")
         if develop_fallback:
@@ -137,35 +148,43 @@ def extract_companion(
         tmp.unlink()
 
     preview_ok = False
-    for tag in ("PreviewImage", "JpgFromRaw"):
-        try:
-            if _extract_tag_to_file(raw, tag, tmp) and _valid_jpeg(tmp, min_jpeg_bytes):
-                preview_ok = True
-                log.debug("preview ok via %s for %s", tag, raw)
-                break
-            if tmp.exists():
-                tmp.unlink()
-        except Exception as exc:  # noqa: BLE001
-            log.debug("preview %s failed for %s: %s", tag, raw, exc)
-            if tmp.exists():
-                tmp.unlink(missing_ok=True)
+    if not force_develop:
+        for tag in ("PreviewImage", "JpgFromRaw"):
+            try:
+                if _extract_tag_to_file(raw, tag, tmp) and _valid_jpeg(tmp, min_jpeg_bytes):
+                    preview_ok = True
+                    log.debug("preview ok via %s for %s", tag, raw)
+                    break
+                if tmp.exists():
+                    tmp.unlink()
+            except Exception as exc:  # noqa: BLE001
+                log.debug("preview %s failed for %s: %s", tag, raw, exc)
+                if tmp.exists():
+                    tmp.unlink(missing_ok=True)
 
-    if preview_ok:
-        try:
-            size = _finalize_jpg(raw, tmp, out, tool_name=tool_name)
-            return ExtractResult("ok", "preview", out, size, None)
-        except Exception as exc:  # noqa: BLE001
-            if tmp.exists():
-                tmp.unlink(missing_ok=True)
-            if out.exists():
-                out.unlink(missing_ok=True)
-            return ExtractResult("failed", "preview", None, None, f"postprocess_failed:{exc}")
+        if preview_ok:
+            try:
+                size = _finalize_jpg(raw, tmp, out, tool_name=tool_name)
+                return ExtractResult("ok", "preview", out, size, None)
+            except Exception as exc:  # noqa: BLE001
+                if tmp.exists():
+                    tmp.unlink(missing_ok=True)
+                if out.exists():
+                    out.unlink(missing_ok=True)
+                return ExtractResult("failed", "preview", None, None, f"postprocess_failed:{exc}")
 
     if not develop_fallback:
-        log.warning("preview failed for %s → develop fallback disabled", raw)
+        log.warning(
+            "%s for %s → develop disabled",
+            "force_develop" if force_develop else "preview failed",
+            raw,
+        )
         return ExtractResult("failed", None, None, None, "develop_fallback_disabled")
 
-    log.warning("preview failed for %s → trying full-res develop fallback", raw)
+    if force_develop:
+        log.info("FORCE_DEVELOP → full-res develop for %s", raw)
+    else:
+        log.warning("preview failed for %s → trying full-res develop fallback", raw)
 
     try:
         full_develop(raw, tmp, enable_gpu=enable_gpu)

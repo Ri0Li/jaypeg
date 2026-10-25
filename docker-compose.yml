@@ -35,6 +35,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       REWRITE: ${REWRITE:-false}
       DEVELOP_FALLBACK: ${DEVELOP_FALLBACK:-true}
+      FORCE_DEVELOP: ${FORCE_DEVELOP:-false}
       ENABLE_GPU: ${ENABLE_GPU:-}
       RESULT_DIR: /result
     depends_on:
