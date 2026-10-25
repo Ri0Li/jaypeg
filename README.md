@@ -44,6 +44,7 @@ Useful extras: `./scripts/cron-apply.sh`, `./scripts/job-start.sh` / `job-stop.s
 | `REWRITE` | Regenerate tool-stamped JPGs only (never camera duals) |
 | `FORCE_DEVELOP` | Always Darktable; concurrency forced to 1 |
 | `ENABLE_GPU` | `true` / `false` / empty (= auto from `INTENT`) |
+| `CONCURRENCY` | Empty = autotune from `INTENT`; set to pin workers (`dry-run` / `extract`) |
 
 Cron: `CRON_ENABLE`, `CRON_START`, `CRON_STOP` (stop kills **worker only**).
 

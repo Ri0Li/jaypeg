@@ -40,6 +40,7 @@ services:
       DEVELOP_FALLBACK: ${DEVELOP_FALLBACK:-true}
       FORCE_DEVELOP: ${FORCE_DEVELOP:-false}
       ENABLE_GPU: ${ENABLE_GPU:-}
+      CONCURRENCY: ${CONCURRENCY:-}
       RESULT_DIR: /result
     depends_on:
       redis:

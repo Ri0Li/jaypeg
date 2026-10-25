@@ -26,6 +26,19 @@ def _env_bool(name: str, default: bool) -> bool:
     raise ValueError(f"{name} must be true or false, got {val!r}")
 
 
+def _env_optional_positive_int(name: str) -> int | None:
+    val = _env(name)
+    if val is None:
+        return None
+    try:
+        n = int(val.strip())
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a positive integer, got {val!r}") from exc
+    if n <= 0:
+        raise ValueError(f"{name} must be a positive integer, got {val!r}")
+    return n
+
+
 @dataclass(frozen=True)
 class Config:
     input_path: str
@@ -77,7 +90,7 @@ def load_config() -> Config:
         force_develop=_env_bool("FORCE_DEVELOP", False),
         output_ext=".JPG",
         min_jpeg_bytes=51200,
-        concurrency=None,
+        concurrency=_env_optional_positive_int("CONCURRENCY"),
         # Compose sets this for the stack; not a user .env.example knob
         redis_url=_env("REDIS_URL", "redis://redis:6379/0") or "redis://redis:6379/0",
         tool_name="jaypeg",

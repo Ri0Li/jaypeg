@@ -44,18 +44,18 @@ def tune(cfg: Config) -> TuneResult:
     ram = _ram_mb()
     gpu_present = _detect_gpu()
 
-    if cfg.concurrency is not None:
-        concurrency = max(1, cfg.concurrency)
-        source = "override"
-    elif cfg.force_develop:
+    if cfg.force_develop:
         # darktable-cli does not like parallel workers sharing host resources
         concurrency = 1
         source = "force_develop"
+    elif cfg.concurrency is not None:
+        concurrency = max(1, cfg.concurrency)
+        source = "override"
     elif cfg.intent == "nas":
         concurrency = min(2, cpus)
         source = "intent=nas"
     elif cfg.intent == "remote":
-        concurrency = min(16, max(2, cpus))
+        concurrency = max(2, cpus)
         source = "intent=remote"
     else:
         concurrency = min(4, max(2, cpus // 2 or 1))
