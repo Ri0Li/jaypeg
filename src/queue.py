@@ -25,14 +25,27 @@ class JobQueue:
 
     def clear_job(self) -> None:
         pipe = self.r.pipeline()
-        pipe.delete(KEY_PENDING, KEY_DONE, KEY_FAILED, KEY_SKIPPED, KEY_PROGRESS)
+        pipe.delete(
+            KEY_PENDING,
+            KEY_DONE,
+            KEY_FAILED,
+            KEY_SKIPPED,
+            KEY_SKIPPED + ":reasons",
+            KEY_PROGRESS,
+        )
         pipe.execute()
 
-    def enqueue_many(self, paths: list[str]) -> int:
+    def enqueue_many(self, paths: list[str], *, rewrite: bool = False) -> int:
         if not paths:
             return 0
-        # Avoid duplicates already done
-        fresh = [p for p in paths if not self.r.sismember(KEY_DONE, p)]
+        if rewrite:
+            pipe = self.r.pipeline()
+            for p in paths:
+                pipe.srem(KEY_DONE, p)
+            pipe.execute()
+            fresh = paths
+        else:
+            fresh = [p for p in paths if not self.r.sismember(KEY_DONE, p)]
         if not fresh:
             return 0
         self.r.rpush(KEY_PENDING, *fresh)
@@ -51,7 +64,6 @@ class JobQueue:
             lock_key = KEY_LOCK_PREFIX + path
             if self.r.set(lock_key, worker_id, nx=True, ex=ttl_sec):
                 return path
-            # Another worker holds the lock; skip for now
             continue
 
     def mark_done(self, path: str) -> None:
@@ -61,9 +73,10 @@ class JobQueue:
         pipe.execute()
 
     def mark_skipped(self, path: str, reason: str) -> None:
+        # Skips go only to KEY_SKIPPED — never inflate failed stats.
         pipe = self.r.pipeline()
         pipe.sadd(KEY_SKIPPED, path)
-        pipe.hset(KEY_FAILED, path, json.dumps({"status": "skipped", "reason": reason}))
+        pipe.hset(KEY_SKIPPED + ":reasons", path, json.dumps({"reason": reason}))
         pipe.delete(KEY_LOCK_PREFIX + path)
         pipe.execute()
 

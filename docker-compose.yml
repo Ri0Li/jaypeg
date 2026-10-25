@@ -1,7 +1,7 @@
 # raw2jpg — single compose file
 # Toggle options by commenting / uncommenting blocks below, then: docker compose up
 #
-# .env: INPUT_PATH, MODE=scan|dry-run|extract, INTENT=nas|balanced|remote, LOG_LEVEL, …
+# .env: only keys from .env.example (INPUT_PATH, MODE, INTENT, …)
 
 name: raw2jpg
 
@@ -12,7 +12,7 @@ services:
     # Remote workers on another host: keep this published on LAN only (never public internet).
     # Worker-only machine: comment out this whole `redis:` service and point REDIS_URL at the main host.
     ports:
-      - "${REDIS_PUBLISH_PORT:-6379}:6379"
+      - "6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -32,18 +32,16 @@ services:
       MODE: ${MODE:-scan}
       LOG_LEVEL: ${LOG_LEVEL:-log}
       INTENT: ${INTENT:-balanced}
-      # Same-stack redis (default). Remote worker: use redis://<main-host-lan-ip>:6379/0
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_URL: redis://redis:6379/0
       REWRITE: ${REWRITE:-false}
-      MAX_LONG_EDGE: ${MAX_LONG_EDGE:-2560}
-      JPEG_QUALITY: ${JPEG_QUALITY:-85}
       DEVELOP_FALLBACK: ${DEVELOP_FALLBACK:-true}
       ENABLE_GPU: ${ENABLE_GPU:-}
-    # Worker-only on a second server (Immich ML style): comment out depends_on
+      RESULT_DIR: /result
     depends_on:
       redis:
         condition: service_healthy
     volumes:
+      - ./result:/result
       # --- photos mount: pick ONE (comment the other) ---
       # A) Local / host path (bind)
       - ${HOST_PATH:?Set HOST_PATH in .env}:/mnt/photos

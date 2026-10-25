@@ -4,6 +4,8 @@ import os
 import socket
 from dataclasses import dataclass
 
+# Only keys listed in .env.example may be read from the environment.
+
 
 def _env(name: str, default: str | None = None) -> str | None:
     val = os.environ.get(name)
@@ -24,13 +26,6 @@ def _env_bool(name: str, default: bool) -> bool:
     raise ValueError(f"{name} must be true or false, got {val!r}")
 
 
-def _env_int(name: str, default: int | None = None) -> int | None:
-    val = _env(name)
-    if val is None:
-        return default
-    return int(val)
-
-
 @dataclass(frozen=True)
 class Config:
     input_path: str
@@ -38,19 +33,17 @@ class Config:
     log_level: str
     intent: str
     rewrite: bool
+    enable_gpu: bool
+    develop_fallback: bool
+    # Hardcoded (not user env)
     output_ext: str
     min_jpeg_bytes: int
     concurrency: int | None
-    enable_gpu: bool
-    path_prefix: str | None
-    shard: int | None
-    shard_count: int | None
     redis_url: str
     tool_name: str
     hostname: str
-    max_long_edge: int
-    jpeg_quality: int
-    develop_fallback: bool
+    result_dir: str
+    result_keep: int
 
     @property
     def write_files(self) -> bool:
@@ -72,33 +65,21 @@ def load_config() -> Config:
     else:
         enable_gpu = _env_bool("ENABLE_GPU", False)
 
-    input_path = _env("INPUT_PATH", "/mnt/photos") or "/mnt/photos"
-    path_prefix = _env("PATH_PREFIX")
-
-    shard = _env_int("SHARD")
-    shard_count = _env_int("SHARD_COUNT")
-    if (shard is None) ^ (shard_count is None):
-        raise ValueError("Set both SHARD and SHARD_COUNT, or neither")
-    if shard_count is not None and (shard_count < 1 or shard is None or shard < 0 or shard >= shard_count):
-        raise ValueError("SHARD must be 0..SHARD_COUNT-1")
-
     return Config(
-        input_path=input_path,
+        input_path=_env("INPUT_PATH", "/mnt/photos") or "/mnt/photos",
         mode=mode,
         log_level=(_env("LOG_LEVEL", "log") or "log").strip().lower(),
         intent=intent,
         rewrite=_env_bool("REWRITE", False),
-        output_ext=_env("OUTPUT_EXT", ".JPG") or ".JPG",
-        min_jpeg_bytes=_env_int("MIN_JPEG_BYTES", 51200) or 51200,
-        concurrency=_env_int("CONCURRENCY"),
         enable_gpu=enable_gpu,
-        path_prefix=path_prefix,
-        shard=shard,
-        shard_count=shard_count,
-        redis_url=_env("REDIS_URL", "redis://redis:6379/0") or "redis://redis:6379/0",
-        tool_name=_env("TOOL_NAME", "raw2jpg") or "raw2jpg",
-        hostname=socket.gethostname(),
-        max_long_edge=_env_int("MAX_LONG_EDGE", 2560) or 2560,
-        jpeg_quality=_env_int("JPEG_QUALITY", 85) or 85,
         develop_fallback=_env_bool("DEVELOP_FALLBACK", True),
+        output_ext=".JPG",
+        min_jpeg_bytes=51200,
+        concurrency=None,
+        # Compose sets this for the stack; not a user .env.example knob
+        redis_url=_env("REDIS_URL", "redis://redis:6379/0") or "redis://redis:6379/0",
+        tool_name="raw2jpg",
+        hostname=socket.gethostname(),
+        result_dir="/result",
+        result_keep=20,
     )

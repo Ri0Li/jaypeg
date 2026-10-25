@@ -6,7 +6,8 @@ from pathlib import Path
 
 log = logging.getLogger("raw2jpg")
 
-EST_BYTES_PER_COMPANION = 1 * 1024 * 1024  # ~embed-sized after quality defaults
+# Rough native embed / full develop average for pre-extract planning
+EST_BYTES_PER_COMPANION = 4 * 1024 * 1024
 
 
 def _giB(n_files: int) -> float:
@@ -20,7 +21,8 @@ def write_pre_extract_report(
     mode: str,
     cfg,
     raw_total: int,
-    dual: int,
+    camera_dual: int,
+    tool_companion: int,
     raw_only: int,
     with_preview: int,
     without_preview: int,
@@ -35,10 +37,8 @@ def write_pre_extract_report(
     ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     job_path = jobs / f"{ts}-{mode}.md"
 
-    # Without fallback: only files that have embed preview produce JPGs
     gb_no_fb = _giB(with_preview)
     fail_no_fb = without_preview
-    # With fallback: develop output is sized like embed → same ~1MiB/file for all raw_only
     gb_with_fb = _giB(raw_only)
 
     lines = [
@@ -48,34 +48,34 @@ def write_pre_extract_report(
         f"- input_path: `{cfg.input_path}`",
         f"- mode: `{mode}`",
         f"- intent: `{cfg.intent}`",
-        f"- develop_fallback_default: `{int(cfg.develop_fallback)}`",
-        f"- jpeg_quality_default: `{cfg.jpeg_quality}`",
-        f"- max_long_edge_default: `{cfg.max_long_edge}` (develop matches embed size when known)",
+        f"- develop_fallback: `{cfg.develop_fallback}`",
         "",
         "## Counts",
         "",
         f"| metric | value |",
         f"|--------|------:|",
         f"| raw_total | {raw_total} |",
-        f"| dual (already have sibling JPG) | {dual} |",
+        f"| camera_dual (foreign sibling JPG) | {camera_dual} |",
+        f"| tool_companion (already stamped by this tool) | {tool_companion} |",
         f"| raw_only (need companion) | {raw_only} |",
         f"| raw_only with embedded preview | {with_preview} |",
         f"| raw_only **without** preview (fail if no fallback) | {fail_no_fb} |",
         "",
-        "## Disk estimate before extract (≈1 MiB / companion, embed-sized)",
+        "## Disk estimate before extract (≈4 MiB / companion, native size)",
         "",
         f"| scenario | files written | est. GiB | fails |",
         f"|----------|--------------:|---------:|------:|",
         f"| **DEVELOP_FALLBACK=false** (preview only) | {with_preview} | {gb_no_fb:.2f} | {fail_no_fb} |",
         f"| **DEVELOP_FALLBACK=true** (preview + develop) | {raw_only} | {gb_with_fb:.2f} | 0* |",
         "",
-        "\\* develop failures still possible; estimate assumes develop succeeds at embed-like size.",
+        "\\* develop failures still possible; estimate assumes success at native size.",
         "",
         "## How to read this",
         "",
-        "- Dual files are skipped (no extra disk).",
-        "- Without fallback, files lacking embed preview are **failed** and use **0 GiB**.",
-        "- With fallback, those files are developed to roughly the same size as embed preview.",
+        "- Camera duals are skipped (never overwritten).",
+        "- Tool companions are skipped unless `REWRITE=true`.",
+        "- Without fallback, files lacking embed preview are **failed**.",
+        "- With fallback, those files are full-res developed (auto-oriented).",
         "- Run `MODE=extract` only after this report looks acceptable.",
         "",
     ]

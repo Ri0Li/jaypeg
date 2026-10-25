@@ -11,10 +11,11 @@ from src import __version__
 from src.autotune import tune
 from src.config import load_config
 from src.discover import discover
-from src.extract import extract_companion
+from src.extract import extract_companion, has_embedded_preview
 from src.formats import has_sibling_non_raw, sibling_stamped_by_tool
 from src.logging_setup import setup_logging
 from src.queue import JobQueue
+from src.report import write_pre_extract_report
 
 log = logging.getLogger("raw2jpg")
 
@@ -37,8 +38,7 @@ def _process_one(
                 queue.mark_skipped(path_str, "tool_companion_exists")
             return "skip"
         if not tool_made:
-            # Camera dual / foreign sibling — never overwrite
-            log.debug("skip dual: %s", raw)
+            log.debug("skip camera dual: %s", raw)
             if queue:
                 queue.mark_skipped(path_str, "sibling_exists")
             return "skip"
@@ -55,8 +55,6 @@ def _process_one(
         enable_gpu=cfg.enable_gpu,
         tool_name=cfg.tool_name,
         write=write,
-        max_long_edge=cfg.max_long_edge,
-        jpeg_quality=cfg.jpeg_quality,
         develop_fallback=cfg.develop_fallback,
     )
 
@@ -72,6 +70,7 @@ def _process_one(
             if queue:
                 queue.mark_done(path_str)
         else:
+            log.warning("failed %s: %s", raw, result.reason or "unknown")
             if queue:
                 queue.mark_failed(path_str, result.reason or "unknown")
     elif result.reason:
@@ -80,39 +79,66 @@ def _process_one(
     return key
 
 
-# After MAX_LONG_EDGE + JPEG_QUALITY, typical companion ~1 MiB (browse size).
-_EST_BYTES_PER_COMPANION = 1 * 1024 * 1024
+_EST_BYTES_PER_COMPANION = 4 * 1024 * 1024
 
 
-def _log_capacity_estimate(cfg, raw_only_count: int) -> None:
+def _log_capacity_estimate(raw_only_count: int, develop_fallback: bool) -> None:
     est = raw_only_count * _EST_BYTES_PER_COMPANION
     log.info(
-        "capacity estimate: raw_only=%s × ~1MiB (after MAX_LONG_EDGE=%s JPEG_QUALITY=%s) ≈ %.2f GiB",
+        "capacity estimate: raw_only=%s × ~4MiB (native size) ≈ %.2f GiB",
         raw_only_count,
-        cfg.max_long_edge,
-        cfg.jpeg_quality,
         est / (1024**3),
     )
     log.info(
         "develop_fallback=%s (false=skip darktable on preview miss — safer for large NAS runs)",
-        cfg.develop_fallback,
+        develop_fallback,
+    )
+
+
+def _preview_counts(raw_only: list[Path]) -> tuple[int, int]:
+    with_preview = 0
+    for p in raw_only:
+        if has_embedded_preview(p):
+            with_preview += 1
+    return with_preview, len(raw_only) - with_preview
+
+
+def _emit_report(cfg, found, *, mode: str) -> None:
+    with_preview, without_preview = _preview_counts(found.raw_only)
+    write_pre_extract_report(
+        result_dir=cfg.result_dir,
+        result_keep=cfg.result_keep,
+        mode=mode,
+        cfg=cfg,
+        raw_total=found.raw_total,
+        camera_dual=found.camera_dual,
+        tool_companion=found.tool_companion,
+        raw_only=len(found.raw_only),
+        with_preview=with_preview,
+        without_preview=without_preview,
+        list_paths=[str(p) for p in found.raw_only],
     )
 
 
 def run_scan(cfg, found) -> int:
     log.info(
-        "scan: raw_total=%s dual=%s raw_only=%s path=%s",
+        "scan: raw_total=%s camera_dual=%s tool_companion=%s raw_only=%s path=%s",
         found.raw_total,
-        found.dual,
+        found.camera_dual,
+        found.tool_companion,
         len(found.raw_only),
         cfg.input_path,
     )
-    _log_capacity_estimate(cfg, len(found.raw_only))
+    _log_capacity_estimate(len(found.raw_only), cfg.develop_fallback)
     if cfg.log_level in {"debug", "verbose"}:
         for p in found.raw_only[:50]:
             log.debug("raw_only: %s", p)
         if len(found.raw_only) > 50:
             log.debug("... and %s more", len(found.raw_only) - 50)
+    try:
+        _emit_report(cfg, found, mode="scan")
+    except OSError as exc:
+        log.error("failed to write result report: %s", exc)
     return 0
 
 
@@ -127,16 +153,23 @@ def run_work(cfg, found, *, write: bool) -> int:
         log.error("redis unavailable: %s", exc)
         return 2
 
-    # REWRITE also walks duals so tool-stamped companions can be regenerated;
-    # camera duals are still skipped inside _process_one.
-    targets = found.all_raw if cfg.rewrite else found.raw_only
+    # REWRITE also processes existing tool companions; camera duals skipped in _process_one.
+    if cfg.rewrite:
+        targets = list(dict.fromkeys([*found.raw_only, *found.tool_companion_paths]))
+    else:
+        targets = found.raw_only
     target_strs = [str(p) for p in targets]
 
     if not target_strs:
         log.info("nothing to process")
+        try:
+            if not write:
+                _emit_report(cfg, found, mode="dry-run")
+        except OSError as exc:
+            log.error("failed to write result report: %s", exc)
         return 0
 
-    _log_capacity_estimate(cfg, len(found.raw_only))
+    _log_capacity_estimate(len(found.raw_only), cfg.develop_fallback)
 
     counts = {"ok_preview": 0, "ok_develop": 0, "skip": 0, "failed": 0}
     counts_lock = threading.Lock()
@@ -176,6 +209,10 @@ def run_work(cfg, found, *, write: bool) -> int:
         )
 
     if not write:
+        try:
+            _emit_report(cfg, found, mode="dry-run")
+        except OSError as exc:
+            log.error("failed to write result report: %s", exc)
         log.info(
             "job: mode=%s write=False targets=%s concurrency=%s enable_gpu=%s",
             cfg.mode,
@@ -197,8 +234,8 @@ def run_work(cfg, found, *, write: bool) -> int:
         with ThreadPoolExecutor(max_workers=concurrency) as pool:
             list(pool.map(dry_one, target_strs))
     else:
-        queued = queue.enqueue_many(target_strs)
-        total_hint = max(queue.pending_len(), 1)
+        queued = queue.enqueue_many(target_strs, rewrite=cfg.rewrite)
+        total_hint = max(len(target_strs), queue.pending_len(), 1)
         log.info(
             "job: mode=%s write=True targets=%s newly_queued=%s concurrency=%s enable_gpu=%s worker=%s",
             cfg.mode,
@@ -247,24 +284,16 @@ def main() -> int:
     cfg = load_config()
     setup_logging(cfg.log_level)
     log.info(
-        "raw2jpg %s starting mode=%s intent=%s enable_gpu=%s "
-        "max_long_edge=%s jpeg_quality=%s develop_fallback=%s input=%s",
+        "raw2jpg %s starting mode=%s intent=%s enable_gpu=%s develop_fallback=%s input=%s",
         __version__,
         cfg.mode,
         cfg.intent,
         cfg.enable_gpu,
-        cfg.max_long_edge,
-        cfg.jpeg_quality,
         cfg.develop_fallback,
         cfg.input_path,
     )
 
-    found = discover(
-        cfg.input_path,
-        path_prefix=cfg.path_prefix,
-        shard=cfg.shard,
-        shard_count=cfg.shard_count,
-    )
+    found = discover(cfg.input_path, tool_name=cfg.tool_name)
 
     if cfg.mode == "scan":
         return run_scan(cfg, found)
