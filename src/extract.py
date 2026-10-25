@@ -14,7 +14,7 @@ log = logging.getLogger("jaypeg")
 
 @dataclass
 class ExtractResult:
-    status: str  # ok | failed
+    status: str  # ok | failed | skip
     method: str | None  # preview | develop
     jpg_path: Path | None
     bytes_written: int | None
@@ -186,6 +186,59 @@ def extract_companion(
     else:
         log.warning("preview failed for %s → trying full-res develop fallback", raw)
 
+    try:
+        full_develop(raw, tmp, enable_gpu=enable_gpu)
+        if not _valid_jpeg(tmp, min_jpeg_bytes):
+            if tmp.exists():
+                tmp.unlink(missing_ok=True)
+            return ExtractResult("failed", "develop", None, None, "develop_output_too_small")
+        size = _finalize_jpg(raw, tmp, out, tool_name=tool_name)
+        return ExtractResult("ok", "develop", out, size, None)
+    except Exception as exc:  # noqa: BLE001
+        if tmp.exists():
+            tmp.unlink(missing_ok=True)
+        return ExtractResult("failed", "develop", None, None, f"develop_failed:{exc}")
+
+
+def develop_companion(
+    raw: Path,
+    *,
+    output_ext: str,
+    min_jpeg_bytes: int,
+    rewrite: bool,
+    enable_gpu: bool,
+    tool_name: str,
+    write: bool,
+) -> ExtractResult:
+    """MODE=develop: skip if embed exists; otherwise Darktable full-res JPEG."""
+    out = companion_jpg_path(raw, output_ext)
+
+    if out.exists() and out.stat().st_size > 0 and not rewrite:
+        return ExtractResult(
+            status="failed",
+            method=None,
+            jpg_path=out,
+            bytes_written=None,
+            reason="companion_exists_use_rewrite",
+        )
+
+    if has_embedded_preview(raw):
+        return ExtractResult(
+            status="skip",
+            method=None,
+            jpg_path=out,
+            bytes_written=None,
+            reason="has_embed",
+        )
+
+    if not write:
+        return ExtractResult("ok", "develop", out, None, "would_develop_no_embed")
+
+    tmp = out.with_suffix(out.suffix + ".partial")
+    if tmp.exists():
+        tmp.unlink()
+
+    log.info("develop (no embed) → full-res for %s", raw)
     try:
         full_develop(raw, tmp, enable_gpu=enable_gpu)
         if not _valid_jpeg(tmp, min_jpeg_bytes):

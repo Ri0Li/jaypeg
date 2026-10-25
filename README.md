@@ -15,7 +15,7 @@ To run this project, you will need the following:
 * **Config:** copy [`.env.example`](.env.example) → `.env`. **Only keys in `.env.example` are supported.**
 * **Worker image (optional pull):** [`ghcr.io/ri0li/jaypeg`](https://github.com/Ri0Li/jaypeg/pkgs/container/jaypeg) (`:latest` on `main`, also `v*` tags; `linux/amd64` + `linux/arm64`).
 
-> **Note:** Prefer `MODE=scan` → read `./result/LATEST.md` → `dry-run` → scoped `extract`. Unscoped whole-archive extract with Darktable can take a very long time and use a lot of disk!
+> **Note:** Prefer `MODE=scan` → read `./result/LATEST.md` → `dry-run` → scoped `extract`. Use `MODE=develop` only for RAWs **without** an embedded preview (Darktable). Unscoped Darktable can take a very long time and use a lot of disk!
 
 ### Software
 1. Clone this repo and `cp .env.example .env`. Set `HOST_PATH` (or NFS vars), `MODE`, and `INTENT`.
@@ -33,18 +33,24 @@ Useful extras: `./scripts/cron-apply.sh`, `./scripts/job-start.sh` / `job-stop.s
 3. If that fails → Darktable full-res develop (unless `DEVELOP_FALLBACK=false`), then auto-orient.
 4. Stamp metadata and copy tags from the RAW. RAW files are never overwritten.
 
+### What develop does
+1. Same sibling / rewrite skips as extract.
+2. If the RAW **has** an embedded preview → **skip** (leave it alone).
+3. If **no** embed → Darktable full-res JPEG + auto-orient + stamp.
+4. Throughput autotune: **GPU** (`ENABLE_GPU` / `INTENT=remote`) → concurrency `1` so one job saturates the card; **CPU-only** → parallel workers sized by CPU/RAM (with `OMP_NUM_THREADS` capped per worker). Pin with `CONCURRENCY=` anytime.
+
 ### `.env` cheat sheet
 
 | Variable | Notes |
 |----------|--------|
-| `MODE` | `scan` \| `dry-run` \| `extract` |
+| `MODE` | `scan` \| `dry-run` \| `extract` \| `develop` |
 | `INTENT` | `nas` \| `balanced` \| `remote` (concurrency / GPU hint) |
 | `HOST_PATH` | Host folder bind-mounted at `/mnt/photos` |
-| `DEVELOP_FALLBACK` | `false` = no Darktable on preview miss |
+| `DEVELOP_FALLBACK` | `false` = no Darktable on preview miss (**extract** only) |
 | `REWRITE` | Regenerate tool-stamped JPGs only (never camera duals) |
-| `FORCE_DEVELOP` | Always Darktable; concurrency forced to 1 |
+| `FORCE_DEVELOP` | Always Darktable on **extract** (skips preview); concurrency follows GPU/CPU rules above |
 | `ENABLE_GPU` | `true` / `false` / empty (= auto from `INTENT`) |
-| `CONCURRENCY` | Empty = autotune from `INTENT`; set to pin workers (`dry-run` / `extract`) |
+| `CONCURRENCY` | Empty = autotune; set to pin workers (`dry-run` / `extract` / `develop`) |
 
 Cron: `CRON_ENABLE`, `CRON_START`, `CRON_STOP` (stop kills **worker only**).
 

@@ -1,7 +1,7 @@
 # jaypeg — single compose file
 # Toggle options by commenting / uncommenting blocks below, then: docker compose up
 #
-# .env: only keys from .env.example (INPUT_PATH, MODE, INTENT, …)
+# .env: only keys from .env.example (INPUT_PATH, MODE=scan|dry-run|extract|develop, INTENT, …)
 
 name: jaypeg
 

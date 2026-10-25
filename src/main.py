@@ -11,7 +11,7 @@ from src import __version__
 from src.autotune import tune
 from src.config import load_config
 from src.discover import discover
-from src.extract import extract_companion, has_embedded_preview
+from src.extract import develop_companion, extract_companion, has_embedded_preview
 from src.formats import has_sibling_non_raw, sibling_stamped_by_tool
 from src.logging_setup import setup_logging
 from src.queue import JobQueue
@@ -27,7 +27,7 @@ def _process_one(
     queue: JobQueue | None,
     write: bool,
 ) -> str:
-    """Return status key: ok_preview | ok_develop | skip | failed"""
+    """Return status key: ok_preview | ok_develop | skip | skip_has_embed | failed"""
     path_str = str(raw)
 
     if has_sibling_non_raw(raw):
@@ -47,17 +47,36 @@ def _process_one(
         log.debug("skip already done: %s", raw)
         return "skip"
 
-    result = extract_companion(
-        raw,
-        output_ext=cfg.output_ext,
-        min_jpeg_bytes=cfg.min_jpeg_bytes,
-        rewrite=cfg.rewrite,
-        enable_gpu=cfg.enable_gpu,
-        tool_name=cfg.tool_name,
-        write=write,
-        develop_fallback=cfg.develop_fallback,
-        force_develop=cfg.force_develop,
-    )
+    if cfg.mode == "develop":
+        result = develop_companion(
+            raw,
+            output_ext=cfg.output_ext,
+            min_jpeg_bytes=cfg.min_jpeg_bytes,
+            rewrite=cfg.rewrite,
+            enable_gpu=cfg.enable_gpu,
+            tool_name=cfg.tool_name,
+            write=write,
+        )
+    else:
+        result = extract_companion(
+            raw,
+            output_ext=cfg.output_ext,
+            min_jpeg_bytes=cfg.min_jpeg_bytes,
+            rewrite=cfg.rewrite,
+            enable_gpu=cfg.enable_gpu,
+            tool_name=cfg.tool_name,
+            write=write,
+            develop_fallback=cfg.develop_fallback,
+            force_develop=cfg.force_develop,
+        )
+
+    if result.status == "skip":
+        key = "skip_has_embed" if result.reason == "has_embed" else "skip"
+        if write and queue:
+            queue.mark_skipped(path_str, result.reason or "skip")
+        elif result.reason:
+            log.debug("dry-run %s → skip (%s)", raw, result.reason)
+        return key
 
     if result.status == "ok" and result.method == "preview":
         key = "ok_preview"
@@ -172,7 +191,13 @@ def run_work(cfg, found, *, write: bool) -> int:
 
     _log_capacity_estimate(len(found.raw_only), cfg.develop_fallback)
 
-    counts = {"ok_preview": 0, "ok_develop": 0, "skip": 0, "failed": 0}
+    counts = {
+        "ok_preview": 0,
+        "ok_develop": 0,
+        "skip": 0,
+        "skip_has_embed": 0,
+        "failed": 0,
+    }
     counts_lock = threading.Lock()
     done_n = 0
     started = time.time()
@@ -189,13 +214,14 @@ def run_work(cfg, found, *, write: bool) -> int:
         remain = max(total_hint - local_done, 0)
         eta = remain / rate if rate else 0
         log.info(
-            "[%s/%s] %.0f%% ok_preview=%s ok_develop=%s skip=%s fail=%s eta=%.0fs path=%s",
+            "[%s/%s] %.0f%% ok_preview=%s ok_develop=%s skip=%s skip_embed=%s fail=%s eta=%.0fs path=%s",
             local_done,
             total_hint,
             100.0 * local_done / max(total_hint, 1),
             snapshot["ok_preview"],
             snapshot["ok_develop"],
             snapshot["skip"],
+            snapshot["skip_has_embed"],
             snapshot["failed"],
             eta,
             path_str,
@@ -205,7 +231,7 @@ def run_work(cfg, found, *, write: bool) -> int:
             total=total_hint,
             ok_preview=snapshot["ok_preview"],
             ok_develop=snapshot["ok_develop"],
-            skip=snapshot["skip"],
+            skip=snapshot["skip"] + snapshot["skip_has_embed"],
             failed=snapshot["failed"],
         )
 
@@ -271,10 +297,11 @@ def run_work(cfg, found, *, write: bool) -> int:
                 fut.result()
 
     log.info(
-        "summary: ok_preview=%s ok_develop=%s skip=%s failed=%s redis=%s",
+        "summary: ok_preview=%s ok_develop=%s skip=%s skip_has_embed=%s failed=%s redis=%s",
         counts["ok_preview"],
         counts["ok_develop"],
         counts["skip"],
+        counts["skip_has_embed"],
         counts["failed"],
         queue.stats(),
     )
@@ -301,7 +328,7 @@ def main() -> int:
         return run_scan(cfg, found)
     if cfg.mode == "dry-run":
         return run_work(cfg, found, write=False)
-    if cfg.mode == "extract":
+    if cfg.mode in {"extract", "develop"}:
         return run_work(cfg, found, write=True)
     log.error("unknown mode %s", cfg.mode)
     return 2

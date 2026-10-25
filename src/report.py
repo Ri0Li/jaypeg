@@ -78,6 +78,7 @@ def write_pre_extract_report(
         "- Without fallback, files lacking embed preview are **failed**.",
         "- With fallback, those files are full-res developed (auto-oriented).",
         "- Run `MODE=extract` only after this report looks acceptable.",
+        "- For raw_only **without** preview only, use `MODE=develop` (skips files that already have an embed).",
         "",
     ]
 

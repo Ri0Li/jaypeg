@@ -61,7 +61,7 @@ class Config:
 
     @property
     def write_files(self) -> bool:
-        return self.mode == "extract"
+        return self.mode in {"extract", "develop"}
 
 
 def load_config() -> Config:
@@ -70,8 +70,8 @@ def load_config() -> Config:
         raise ValueError(f"Invalid INTENT={intent!r}; use nas|remote|balanced")
 
     mode = (_env("MODE", "scan") or "scan").strip().lower()
-    if mode not in {"scan", "dry-run", "extract"}:
-        raise ValueError(f"Invalid MODE={mode!r}; use scan|dry-run|extract")
+    if mode not in {"scan", "dry-run", "extract", "develop"}:
+        raise ValueError(f"Invalid MODE={mode!r}; use scan|dry-run|extract|develop")
 
     gpu_override = _env("ENABLE_GPU")
     if gpu_override is None:
