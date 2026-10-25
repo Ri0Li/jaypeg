@@ -3,7 +3,7 @@
 #
 # .env: only keys from .env.example (INPUT_PATH, MODE, INTENT, …)
 
-name: raw2jpg
+name: jaypeg
 
 services:
   redis:
@@ -22,6 +22,9 @@ services:
       retries: 5
 
   worker:
+    # Prefer pull: docker compose pull && docker compose up
+    # Local rebuild: docker compose build worker
+    image: ghcr.io/ri0li/jaypeg:latest
     build: .
     restart: "no" # one-shot job; exits when MODE finishes
     env_file:

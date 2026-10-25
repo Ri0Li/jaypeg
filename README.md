@@ -1,16 +1,23 @@
-# raw2jpg — RAW companion JPEG tool
+# jaypeg — RAW companion JPEG tool
 
 Batch job that finds RAW files under a path and writes sibling `.JPG` files (camera RAW+JPEG style). Original RAW files are never modified.
+
+Brand: **jaypeg** (sounds like JPEG). Tool stamp in metadata remains `raw2jpg/<version>` for now.
 
 Stack (Immich-style): **redis + worker**. One compose file — toggle mounts / GPU / remote worker by **commenting blocks** in [`docker-compose.yml`](docker-compose.yml).
 
 ```bash
 cp .env.example .env
 # edit INPUT_PATH, MODE, INTENT, HOST_PATH or NAS_*
+docker compose pull    # worker from GHCR (linux/amd64 + arm64)
 docker compose up
 ```
 
+Worker image: [`ghcr.io/ri0li/jaypeg`](https://github.com/Ri0Li/jaypeg/pkgs/container/jaypeg) (`:latest` on `main`, also semver tags `v*`). Local rebuild: `docker compose build worker`.
+
 Worker exits when the job finishes (`restart: "no"`). Redis data persists in the `redis-data` volume for resume.
+
+If `docker pull` fails with unauthorized, the package may still be private — open the package on GitHub → **Package settings** → change visibility to **Public**.
 
 ## Environment reference (`.env`)
 
@@ -186,10 +193,11 @@ Hundreds of thousands of RAW files is a multi-day job. Prefer scoped `INPUT_PATH
 ## Layout
 
 ```
-docker-compose.yml   # only compose file — comment toggles inside
-.env.example         # only supported env keys
+docker-compose.yml              # only compose file — comment toggles inside
+.env.example                    # only supported env keys
 Dockerfile
+.github/workflows/publish.yml   # push main/tags → GHCR multi-arch
 scripts/
 src/
-result/              # scan/dry-run reports (gitignored)
+result/                         # scan/dry-run reports (gitignored)
 ```
