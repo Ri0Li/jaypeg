@@ -21,7 +21,7 @@ To run this project, you will need the following:
 1. Clone this repo and `cp .env.example .env`. Set `HOST_PATH` (or NFS vars), `MODE`, and `INTENT`.
 2. `docker compose pull` (or `docker compose build worker` for a local image).
 3. `docker compose up` — worker exits when the job finishes; redis data stays in the volume for resume.
-4. After `scan` / `dry-run`, check `./result/LATEST.md`. Set `MODE=extract` on a small `INPUT_PATH` when it looks sane.
+4. After `scan` / `dry-run` / `extract` / `develop`, check `./result/LATEST.md` (and `result/jobs/`). Prefer a small `INPUT_PATH` until the report looks sane.
 5. ???
 6. Profit
 

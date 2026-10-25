@@ -180,13 +180,13 @@ def run_work(cfg, found, *, write: bool) -> int:
         targets = found.raw_only
     target_strs = [str(p) for p in targets]
 
+    try:
+        _emit_report(cfg, found, mode=cfg.mode)
+    except OSError as exc:
+        log.error("failed to write result report: %s", exc)
+
     if not target_strs:
         log.info("nothing to process")
-        try:
-            if not write:
-                _emit_report(cfg, found, mode="dry-run")
-        except OSError as exc:
-            log.error("failed to write result report: %s", exc)
         return 0
 
     _log_capacity_estimate(len(found.raw_only), cfg.develop_fallback)
@@ -236,10 +236,6 @@ def run_work(cfg, found, *, write: bool) -> int:
         )
 
     if not write:
-        try:
-            _emit_report(cfg, found, mode="dry-run")
-        except OSError as exc:
-            log.error("failed to write result report: %s", exc)
         log.info(
             "job: mode=%s write=False targets=%s concurrency=%s enable_gpu=%s",
             cfg.mode,

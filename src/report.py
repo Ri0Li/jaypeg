@@ -29,7 +29,7 @@ def write_pre_extract_report(
     list_paths: list[str] | None = None,
     max_listed: int = 100,
 ) -> Path:
-    """Write scan/dry-run markdown so user can judge extract cost before writing JPGs."""
+    """Write job markdown (scan / dry-run / extract / develop) under result/."""
     root = Path(result_dir)
     jobs = root / "jobs"
     jobs.mkdir(parents=True, exist_ok=True)
