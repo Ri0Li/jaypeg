@@ -45,6 +45,7 @@ Useful extras: `./scripts/cron-apply.sh`, `./scripts/job-start.sh` / `job-stop.s
 |----------|--------|
 | `MODE` | `scan` \| `dry-run` \| `extract` \| `develop` |
 | `LOG_LEVEL` | `verbose` \| `debug` \| `log` \| `warn` \| `error` (default `log`; `debug` and `verbose` also print per-file detail) |
+| `TZ` | IANA timezone for container logs (default `UTC` if unset; e.g. `Asia/Hong_Kong`) |
 | `INTENT` | `nas` \| `balanced` \| `remote` (concurrency / GPU hint) |
 | `HOST_PATH` | Host folder bind-mounted at `/mnt/photos` |
 | `DEVELOP_FALLBACK` | `false` = no Darktable on preview miss (**extract** only) |
