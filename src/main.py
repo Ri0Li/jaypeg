@@ -10,7 +10,7 @@ from pathlib import Path
 from src import __version__
 from src.autotune import tune
 from src.config import load_config
-from src.discover import discover
+from src.discover import discover, iter_split_roots, root_has_direct_raws
 from src.extract import develop_companion, extract_companion, has_embedded_preview
 from src.formats import has_sibling_non_raw, sibling_stamped_by_tool
 from src.logging_setup import setup_logging
@@ -18,6 +18,28 @@ from src.queue import JobQueue
 from src.report import write_pre_extract_report
 
 log = logging.getLogger("jaypeg")
+
+
+def _run_mode(cfg, found) -> int:
+    if cfg.mode == "scan":
+        return run_scan(cfg, found)
+    if cfg.mode == "dry-run":
+        return run_work(cfg, found, write=False)
+    if cfg.mode in {"extract", "develop"}:
+        return run_work(cfg, found, write=True)
+    log.error("unknown mode %s", cfg.mode)
+    return 2
+
+
+def _split_units(input_path: str, depth: int) -> list[tuple[Path, bool]]:
+    """Return (path, recursive) units: optional root RAWs first, then depth-N dirs."""
+    root = Path(input_path)
+    units: list[tuple[Path, bool]] = []
+    if root_has_direct_raws(root):
+        units.append((root, False))
+    for d in iter_split_roots(root, depth):
+        units.append((d, True))
+    return units
 
 
 def _process_one(
@@ -307,27 +329,44 @@ def run_work(cfg, found, *, write: bool) -> int:
 def main() -> int:
     cfg = load_config()
     setup_logging(cfg.log_level)
+    split = cfg.discover_split_depth
     log.info(
-        "jaypeg %s starting mode=%s intent=%s enable_gpu=%s develop_fallback=%s force_develop=%s input=%s",
+        "jaypeg %s starting mode=%s intent=%s enable_gpu=%s develop_fallback=%s "
+        "force_develop=%s discover_split=%s input=%s",
         __version__,
         cfg.mode,
         cfg.intent,
         cfg.enable_gpu,
         cfg.develop_fallback,
         cfg.force_develop,
+        f"depth:{split}" if split else "off",
         cfg.input_path,
     )
 
-    found = discover(cfg.input_path, tool_name=cfg.tool_name)
+    if split is None:
+        found = discover(cfg.input_path, tool_name=cfg.tool_name)
+        return _run_mode(cfg, found)
 
-    if cfg.mode == "scan":
-        return run_scan(cfg, found)
-    if cfg.mode == "dry-run":
-        return run_work(cfg, found, write=False)
-    if cfg.mode in {"extract", "develop"}:
-        return run_work(cfg, found, write=True)
-    log.error("unknown mode %s", cfg.mode)
-    return 2
+    units = _split_units(cfg.input_path, split)
+    if not units:
+        log.info("discover_split depth:%s — no units under %s", split, cfg.input_path)
+        return 0
+
+    log.info("discover_split depth:%s — %s unit(s), newest mtime first", split, len(units))
+    worst = 0
+    for i, (unit_path, recursive) in enumerate(units, start=1):
+        log.info(
+            "split unit [%s/%s] path=%s recursive=%s",
+            i,
+            len(units),
+            unit_path,
+            recursive,
+        )
+        found = discover(unit_path, tool_name=cfg.tool_name, recursive=recursive)
+        rc = _run_mode(cfg, found)
+        if rc > worst:
+            worst = rc
+    return worst
 
 
 if __name__ == "__main__":

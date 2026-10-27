@@ -39,6 +39,33 @@ def _env_optional_positive_int(name: str) -> int | None:
     return n
 
 
+def _env_discover_split(name: str = "DISCOVER_SPLIT") -> int | None:
+    """Return depth N for split mode, or None when off.
+
+    Accepts: off (default) | children (=depth:1) | depth:N (N>=1).
+    """
+    val = _env(name, "off")
+    if val is None:
+        return None
+    s = val.strip().lower()
+    if s in {"", "off", "false", "0", "no"}:
+        return None
+    if s == "children":
+        return 1
+    if s.startswith("depth:"):
+        rest = s.split(":", 1)[1].strip()
+        try:
+            n = int(rest)
+        except ValueError as exc:
+            raise ValueError(
+                f"{name} must be off|children|depth:N, got {val!r}"
+            ) from exc
+        if n < 1:
+            raise ValueError(f"{name} depth must be >= 1, got {val!r}")
+        return n
+    raise ValueError(f"{name} must be off|children|depth:N, got {val!r}")
+
+
 @dataclass(frozen=True)
 class Config:
     input_path: str
@@ -49,6 +76,8 @@ class Config:
     enable_gpu: bool
     develop_fallback: bool
     force_develop: bool
+    # None = full-tree discover; int = process dirs at relative depth N one by one
+    discover_split_depth: int | None
     # Hardcoded (not user env)
     output_ext: str
     min_jpeg_bytes: int
@@ -88,6 +117,7 @@ def load_config() -> Config:
         enable_gpu=enable_gpu,
         develop_fallback=_env_bool("DEVELOP_FALLBACK", True),
         force_develop=_env_bool("FORCE_DEVELOP", False),
+        discover_split_depth=_env_discover_split(),
         output_ext=".JPG",
         min_jpeg_bytes=51200,
         concurrency=_env_optional_positive_int("CONCURRENCY"),

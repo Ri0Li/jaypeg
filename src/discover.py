@@ -24,10 +24,58 @@ class DiscoverResult:
         return self.camera_dual
 
 
+def iter_split_roots(root: str | Path, depth: int) -> list[Path]:
+    """Directories at exactly relative depth N under root, newest mtime first."""
+    if depth < 1:
+        raise ValueError(f"split depth must be >= 1, got {depth}")
+    root_path = Path(root)
+    level = [root_path]
+    for _ in range(depth):
+        next_level: list[Path] = []
+        for parent in level:
+            try:
+                for child in parent.iterdir():
+                    try:
+                        if child.is_dir():
+                            next_level.append(child)
+                    except OSError:
+                        continue
+            except OSError as exc:
+                log.warning("cannot list %s: %s", parent, exc)
+        level = next_level
+        if not level:
+            break
+
+    def _mtime(p: Path) -> float:
+        try:
+            return p.stat().st_mtime
+        except OSError:
+            return 0.0
+
+    level.sort(key=_mtime, reverse=True)
+    return level
+
+
+def root_has_direct_raws(root: str | Path) -> bool:
+    """True if root itself contains RAW files (not only in subdirs)."""
+    root_path = Path(root)
+    try:
+        for child in root_path.iterdir():
+            try:
+                if child.is_file() and is_raw(child.name):
+                    return True
+            except OSError:
+                continue
+    except OSError:
+        return False
+    return False
+
+
 def discover(
     root: str | Path,
     *,
     tool_name: str = "jaypeg",
+    recursive: bool = True,
 ) -> DiscoverResult:
     root_path = Path(root)
     if not root_path.exists():
@@ -40,7 +88,16 @@ def discover(
     tool_companion_paths: list[Path] = []
     raw_only: list[Path] = []
 
-    for dirpath, _dirnames, filenames in os_walk(root_path):
+    if recursive:
+        walk_iter = os_walk(root_path)
+    else:
+        try:
+            names = [p.name for p in root_path.iterdir() if p.is_file()]
+        except OSError as exc:
+            raise FileNotFoundError(f"cannot list {root_path}: {exc}") from exc
+        walk_iter = [(str(root_path), [], names)]
+
+    for dirpath, _dirnames, filenames in walk_iter:
         base = Path(dirpath)
         for name in filenames:
             if not is_raw(name):
@@ -58,8 +115,9 @@ def discover(
     raw_only.sort()
     tool_companion_paths.sort()
     log.debug(
-        "discover: root=%s raw=%s camera_dual=%s tool_companion=%s raw_only=%s",
+        "discover: root=%s recursive=%s raw=%s camera_dual=%s tool_companion=%s raw_only=%s",
         root_path,
+        recursive,
         len(all_raw),
         camera_dual,
         len(tool_companion_paths),

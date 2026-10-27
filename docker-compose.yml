@@ -43,6 +43,7 @@ services:
       REWRITE: ${REWRITE:-false}
       DEVELOP_FALLBACK: ${DEVELOP_FALLBACK:-true}
       FORCE_DEVELOP: ${FORCE_DEVELOP:-false}
+      DISCOVER_SPLIT: ${DISCOVER_SPLIT:-off}
       ENABLE_GPU: ${ENABLE_GPU:-}
       CONCURRENCY: ${CONCURRENCY:-}
       RESULT_DIR: /result
