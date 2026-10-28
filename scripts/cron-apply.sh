@@ -25,8 +25,11 @@ mkdir -p "$LOG_DIR"
 validate_cron5() {
   local expr="$1"
   local name="$2"
+  # Disable glob so '*' in cron fields is not expanded to filenames.
+  set -f
   # shellcheck disable=SC2086
   set -- $expr
+  set +f
   if [[ $# -ne 5 ]]; then
     echo "${name} must be 5-field cron (min hour dom month dow), got: ${expr}" >&2
     exit 1
