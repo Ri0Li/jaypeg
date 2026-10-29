@@ -10,6 +10,7 @@ from pathlib import Path
 from src import __version__
 from src.autotune import tune
 from src.config import load_config
+from src.develop import configure_develop_gate
 from src.discover import discover, iter_split_roots, root_has_direct_raws
 from src.extract import develop_companion, extract_companion, has_embedded_preview
 from src.formats import has_sibling_non_raw, sibling_stamped_by_tool
@@ -187,6 +188,10 @@ def run_scan(cfg, found) -> int:
 def run_work(cfg, found, *, write: bool) -> int:
     tune_result = tune(cfg)
     concurrency = tune_result.concurrency
+    configure_develop_gate(
+        enable_gpu=cfg.enable_gpu,
+        pool_concurrency=concurrency,
+    )
     worker_id = f"{cfg.hostname}-{uuid.uuid4().hex[:8]}"
 
     try:

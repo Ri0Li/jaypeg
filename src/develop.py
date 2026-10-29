@@ -5,9 +5,44 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 from pathlib import Path
 
 log = logging.getLogger("jaypeg")
+
+# Caps parallel darktable-cli. Extract may use many preview workers; without a
+# gate, develop_fallback stampedes GPU/RAM (e.g. intent=remote → 20× darktable).
+_dt_gate: threading.Semaphore | None = None
+_dt_gate_lock = threading.Lock()
+
+
+def configure_develop_gate(*, enable_gpu: bool, pool_concurrency: int) -> None:
+    """Set max concurrent darktable-cli processes for this process.
+
+    GPU: always 1 (one OpenCL job saturates the card).
+    CPU: at most pool size, hard-capped at 4 (each develop is RAM-heavy).
+    """
+    global _dt_gate
+    if enable_gpu:
+        n = 1
+    else:
+        n = max(1, min(int(pool_concurrency), 4))
+    with _dt_gate_lock:
+        _dt_gate = threading.Semaphore(n)
+    log.info(
+        "develop gate: darktable concurrency=%s (enable_gpu=%s pool=%s)",
+        n,
+        enable_gpu,
+        pool_concurrency,
+    )
+
+
+def _develop_gate(enable_gpu: bool) -> threading.Semaphore:
+    with _dt_gate_lock:
+        if _dt_gate is not None:
+            return _dt_gate
+    # Not configured yet (tests / unexpected call path): safe defaults.
+    return threading.Semaphore(1 if enable_gpu else 4)
 
 
 def _imagemagick_bin() -> str | None:
@@ -139,44 +174,46 @@ def full_develop(
     env = os.environ.copy()
     env["DARKTABLE_USE_OPENCL"] = "1" if enable_gpu else "0"
 
-    # Isolated config + in-memory library so parallel workers don't lock each other.
-    with tempfile.TemporaryDirectory(prefix="jaypeg-dt-") as tmp:
-        tmp_path = Path(tmp)
-        cfg = tmp_path / "config"
-        cfg.mkdir()
-        tmp_out = tmp_path / "out.jpg"
-        cmd = [
-            "darktable-cli",
-            str(raw_path),
-            str(tmp_out),
-            "--core",
-            "--library",
-            ":memory:",
-            "--configdir",
-            str(cfg),
-            "--conf",
-            f"opencl={1 if enable_gpu else 0}",
-        ]
-        log.debug("develop cmd: %s", " ".join(cmd))
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout_sec,
-            env=env,
-            check=False,
-        )
-        if proc.returncode != 0:
-            raise RuntimeError(
-                f"darktable-cli failed ({proc.returncode}): {proc.stderr.strip() or proc.stdout.strip()}"
+    gate = _develop_gate(enable_gpu)
+    with gate:
+        # Isolated config + in-memory library so queued workers don't share locks.
+        with tempfile.TemporaryDirectory(prefix="jaypeg-dt-") as tmp:
+            tmp_path = Path(tmp)
+            cfg = tmp_path / "config"
+            cfg.mkdir()
+            tmp_out = tmp_path / "out.jpg"
+            cmd = [
+                "darktable-cli",
+                str(raw_path),
+                str(tmp_out),
+                "--core",
+                "--library",
+                ":memory:",
+                "--configdir",
+                str(cfg),
+                "--conf",
+                f"opencl={1 if enable_gpu else 0}",
+            ]
+            log.debug("develop cmd: %s", " ".join(cmd))
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout_sec,
+                env=env,
+                check=False,
             )
-        produced = tmp_out if tmp_out.exists() else None
-        if produced is None:
-            candidates = sorted(tmp_path.glob("out*.jpg")) + sorted(tmp_path.glob("out*.JPG"))
-            if candidates:
-                produced = candidates[0]
-        if produced is None or not produced.exists():
-            raise RuntimeError("darktable-cli produced no JPEG")
-        shutil.copy2(produced, out_jpg)
+            if proc.returncode != 0:
+                raise RuntimeError(
+                    f"darktable-cli failed ({proc.returncode}): {proc.stderr.strip() or proc.stdout.strip()}"
+                )
+            produced = tmp_out if tmp_out.exists() else None
+            if produced is None:
+                candidates = sorted(tmp_path.glob("out*.jpg")) + sorted(tmp_path.glob("out*.JPG"))
+                if candidates:
+                    produced = candidates[0]
+            if produced is None or not produced.exists():
+                raise RuntimeError("darktable-cli produced no JPEG")
+            shutil.copy2(produced, out_jpg)
 
     _auto_orient_from_raw(raw_path, out_jpg)

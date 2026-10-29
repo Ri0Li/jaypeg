@@ -93,7 +93,9 @@ def tune(cfg: Config) -> TuneResult:
     elif _heavy_develop(cfg) and not cfg.enable_gpu:
         concurrency, source = _cpu_develop_concurrency(cfg, cpus, ram)
     else:
-        # extract / dry-run (preview-first): unchanged INTENT formula
+        # extract / dry-run (preview-first): INTENT pool size for exiftool/preview.
+        # Darktable fallback is gated separately in develop.configure_develop_gate
+        # (GPU→1) so remote extract does not stampede OpenCL when preview misses.
         concurrency, source = _intent_concurrency(cfg, cpus)
 
     if ram and ram < 1024:

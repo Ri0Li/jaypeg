@@ -25,6 +25,8 @@ Redis remembers completed paths; it does **not** cache discover. A full-tree dis
 
 Image: [`ghcr.io/ri0li/jaypeg`](https://github.com/Ri0Li/jaypeg/pkgs/container/jaypeg) (`:latest` on `main`, also `v*` tags; `linux/amd64` + `linux/arm64`).
 
+Worker **Darktable**: `amd64` installs from Debian **unstable** (5.4.x, Canon EOS R5 Mark II / LibRaw 0.22+). Other arches use bookworm’s packaged Darktable until unstable ships them.
+
 ## Quick start
 
 1. Clone this repo (include **`scripts/`**) and `cp .env.example .env`.
@@ -49,7 +51,7 @@ Image: [`ghcr.io/ri0li/jaypeg`](https://github.com/Ri0Li/jaypeg/pkgs/container/j
 1. Same sibling / rewrite skips as extract.
 2. If the RAW **has** an embedded preview → **skip**.
 3. If **no** embed → Darktable full-res JPEG + auto-orient + stamp.
-4. Autotune: **GPU** (`ENABLE_GPU` / `INTENT=remote`) → concurrency `1`; **CPU-only** → parallel workers by CPU/RAM. Pin with `CONCURRENCY=`.
+4. Autotune: **GPU** + `MODE=develop` / `FORCE_DEVELOP` → pool concurrency `1`; **extract** preview pool follows `INTENT` (e.g. remote → CPU count). **Darktable** itself is hard-gated (GPU → 1 process; CPU → max 4) so `develop_fallback` cannot stampede VRAM/RAM. Pin the preview pool with `CONCURRENCY=`.
 
 ### scan / dry-run
 
