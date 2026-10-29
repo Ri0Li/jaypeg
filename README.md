@@ -103,9 +103,9 @@ crontab -l | grep jaypeg
 | `CRON_START` | 5-field cron → `job-start.sh` (redis + worker) |
 | `CRON_STOP` | 5-field cron → `job-stop.sh` (**worker only**; redis stays up) |
 
-Times follow the **host** timezone (not container `TZ`). Deploy must include `scripts/`. Logs: `result/cron-start.log`, `result/cron-stop.log`.
+Times follow the **host** timezone (not container `TZ`). Deploy must include `scripts/`. Cron logs: `logs/cron-start.log`, `logs/cron-stop.log` (not under `result/`, which the container often owns as root).
 
-Manual run: `./scripts/job-start.sh`.
+`job-start.sh` runs `docker compose pull` then `up` (no `--build`). Manual: `./scripts/job-start.sh`.
 
 ## Configuration
 

@@ -19,7 +19,8 @@ set +a
 MARKER="# jaypeg-cron"
 START_SH="${ROOT}/scripts/job-start.sh"
 STOP_SH="${ROOT}/scripts/job-stop.sh"
-LOG_DIR="${ROOT}/result"
+# Host-owned logs (not result/, which docker often writes as root).
+LOG_DIR="${ROOT}/logs"
 mkdir -p "$LOG_DIR"
 
 validate_cron5() {
