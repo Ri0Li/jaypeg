@@ -4,7 +4,14 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.formats import has_sibling_non_raw, is_raw, sibling_stamped_by_tool
+from src.discover_cache import (
+    KIND_CAMERA_DUAL,
+    KIND_RAW_ONLY,
+    KIND_TOOL_COMPANION,
+    DiscoverCache,
+    sibling_fingerprint,
+)
+from src.formats import is_raw, sibling_stamped_by_tool
 
 log = logging.getLogger("jaypeg")
 
@@ -71,11 +78,44 @@ def root_has_direct_raws(root: str | Path) -> bool:
     return False
 
 
+def _classify_raw(
+    path: Path,
+    *,
+    tool_name: str,
+    cache: DiscoverCache | None,
+) -> str:
+    try:
+        st = path.stat()
+    except OSError:
+        return KIND_RAW_ONLY
+
+    raw_mtime_ns = int(getattr(st, "st_mtime_ns", int(st.st_mtime * 1_000_000_000)))
+    raw_size = int(st.st_size)
+    sibling_fp = sibling_fingerprint(path)
+
+    if cache is not None:
+        hit = cache.get(str(path), raw_mtime_ns, raw_size, sibling_fp)
+        if hit is not None:
+            return hit
+
+    if not sibling_fp:
+        kind = KIND_RAW_ONLY
+    elif sibling_stamped_by_tool(path, tool_name):
+        kind = KIND_TOOL_COMPANION
+    else:
+        kind = KIND_CAMERA_DUAL
+
+    if cache is not None:
+        cache.put(str(path), raw_mtime_ns, raw_size, sibling_fp, kind)
+    return kind
+
+
 def discover(
     root: str | Path,
     *,
     tool_name: str = "jaypeg",
     recursive: bool = True,
+    cache: DiscoverCache | None = None,
 ) -> DiscoverResult:
     root_path = Path(root)
     if not root_path.exists():
@@ -104,9 +144,10 @@ def discover(
                 continue
             path = base / name
             all_raw.append(path)
-            if not has_sibling_non_raw(path):
+            kind = _classify_raw(path, tool_name=tool_name, cache=cache)
+            if kind == KIND_RAW_ONLY:
                 raw_only.append(path)
-            elif sibling_stamped_by_tool(path, tool_name):
+            elif kind == KIND_TOOL_COMPANION:
                 tool_companion_paths.append(path)
             else:
                 camera_dual += 1

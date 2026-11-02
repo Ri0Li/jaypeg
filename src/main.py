@@ -12,6 +12,7 @@ from src.autotune import tune
 from src.config import load_config
 from src.develop import configure_develop_gate
 from src.discover import discover, iter_split_roots, root_has_direct_raws
+from src.discover_cache import DiscoverCache
 from src.extract import develop_companion, extract_companion, has_embedded_preview
 from src.formats import has_sibling_non_raw, sibling_stamped_by_tool
 from src.logging_setup import setup_logging
@@ -335,9 +336,13 @@ def main() -> int:
     cfg = load_config()
     setup_logging(cfg.log_level)
     split = cfg.discover_split_depth
+    cache = None
+    if cfg.discover_cache:
+        cache = DiscoverCache(Path(cfg.result_dir) / "discover-cache.sqlite")
+        log.info("discover cache: enabled path=%s", cache.path)
     log.info(
         "jaypeg %s starting mode=%s intent=%s enable_gpu=%s develop_fallback=%s "
-        "force_develop=%s discover_split=%s input=%s",
+        "force_develop=%s discover_split=%s discover_cache=%s input=%s",
         __version__,
         cfg.mode,
         cfg.intent,
@@ -345,33 +350,47 @@ def main() -> int:
         cfg.develop_fallback,
         cfg.force_develop,
         f"depth:{split}" if split else "off",
+        cfg.discover_cache,
         cfg.input_path,
     )
 
-    if split is None:
-        found = discover(cfg.input_path, tool_name=cfg.tool_name)
-        return _run_mode(cfg, found)
+    try:
+        if split is None:
+            found = discover(cfg.input_path, tool_name=cfg.tool_name, cache=cache)
+            return _run_mode(cfg, found)
 
-    units = _split_units(cfg.input_path, split)
-    if not units:
-        log.info("discover_split depth:%s — no units under %s", split, cfg.input_path)
-        return 0
+        units = _split_units(cfg.input_path, split)
+        if not units:
+            log.info("discover_split depth:%s — no units under %s", split, cfg.input_path)
+            return 0
 
-    log.info("discover_split depth:%s — %s unit(s), newest mtime first", split, len(units))
-    worst = 0
-    for i, (unit_path, recursive) in enumerate(units, start=1):
         log.info(
-            "split unit [%s/%s] path=%s recursive=%s",
-            i,
+            "discover_split depth:%s — %s unit(s), newest mtime first",
+            split,
             len(units),
-            unit_path,
-            recursive,
         )
-        found = discover(unit_path, tool_name=cfg.tool_name, recursive=recursive)
-        rc = _run_mode(cfg, found)
-        if rc > worst:
-            worst = rc
-    return worst
+        worst = 0
+        for i, (unit_path, recursive) in enumerate(units, start=1):
+            log.info(
+                "split unit [%s/%s] path=%s recursive=%s",
+                i,
+                len(units),
+                unit_path,
+                recursive,
+            )
+            found = discover(
+                unit_path,
+                tool_name=cfg.tool_name,
+                recursive=recursive,
+                cache=cache,
+            )
+            rc = _run_mode(cfg, found)
+            if rc > worst:
+                worst = rc
+        return worst
+    finally:
+        if cache is not None:
+            cache.close()
 
 
 if __name__ == "__main__":

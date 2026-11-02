@@ -42,8 +42,8 @@ Worker **Darktable**: `amd64` installs from Debian **unstable** (5.4.x, Canon EO
 ### extract
 
 1. Skip camera duals (sibling JPG without this tool’s stamp). Skip tool companions unless `REWRITE=true`.
-2. Try ExifTool embedded preview (`-PreviewImage`, then `-JpgFromRaw`).
-3. If that fails → Darktable full-res develop (unless `DEVELOP_FALLBACK=false`), then auto-orient.
+2. Try ExifTool embedded preview (`-PreviewImage`, then `-JpgFromRaw`); keep RAW **Orientation** (embeds are often landscape pixels that rely on that tag).
+3. If that fails → Darktable full-res develop (unless `DEVELOP_FALLBACK=false`), bake auto-orient into pixels, then `Orientation=1`.
 4. Stamp metadata and copy tags from the RAW. RAW files are never overwritten.
 
 ### develop
@@ -90,6 +90,12 @@ MODE=extract
 
 `CRON_STOP` may kill the worker mid-unit; the next run resumes via redis `done` and rediscovers only that unit’s folder (not the entire NAS).
 
+## Discover cache
+
+Classify (raw-only / camera dual / tool companion) normally needs an exiftool stamp check per sibling JPG. **`DISCOVER_CACHE=true`** (default) stores the last classify result in `/result/discover-cache.sqlite` keyed by RAW path + mtime/size + a cheap sibling fingerprint (name/mtime/size). Unchanged files skip exiftool; redis `done` is unchanged and still gates extract work.
+
+Disable with `DISCOVER_CACHE=false`. Delete the sqlite file to force a full reclassify.
+
 ## Cron (host)
 
 `.env` cron keys do **nothing** until applied on the host:
@@ -128,6 +134,7 @@ Only keys listed in [`.env.example`](.env.example) are supported.
 | `ENABLE_GPU` | `true` / `false` / empty (= auto from `INTENT`) |
 | `CONCURRENCY` | Empty = autotune; pin worker count for dry-run / extract / develop |
 | `DISCOVER_SPLIT` | `off` \| `children` \| `depth:N` — see [Discover split](#discover-split-large-trees) |
+| `DISCOVER_CACHE` | `true` (default) \| `false` — see [Discover cache](#discover-cache) |
 | `CRON_*` | See [Cron](#cron-host) |
 
 ## FAQ

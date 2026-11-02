@@ -78,6 +78,8 @@ class Config:
     force_develop: bool
     # None = full-tree discover; int = process dirs at relative depth N one by one
     discover_split_depth: int | None
+    # Immich-style classify cache (skip exiftool when raw+siblings unchanged)
+    discover_cache: bool
     # Hardcoded (not user env)
     output_ext: str
     min_jpeg_bytes: int
@@ -118,6 +120,7 @@ def load_config() -> Config:
         develop_fallback=_env_bool("DEVELOP_FALLBACK", True),
         force_develop=_env_bool("FORCE_DEVELOP", False),
         discover_split_depth=_env_discover_split(),
+        discover_cache=_env_bool("DISCOVER_CACHE", True),
         output_ext=".JPG",
         min_jpeg_bytes=51200,
         concurrency=_env_optional_positive_int("CONCURRENCY"),
